@@ -1,12 +1,55 @@
-# These are supported funding model platforms
+name: Build Kernel with AnyKernel3
 
-github: osm0sis # Replace with up to 4 GitHub Sponsors-enabled usernames e.g., [user1, user2]
-patreon: # Replace with a single Patreon username
-open_collective: # Replace with a single Open Collective username
-ko_fi: # Replace with a single Ko-fi username
-tidelift: # Replace with a single Tidelift platform-name/package-name e.g., npm/babel
-community_bridge: # Replace with a single Community Bridge project-name e.g., cloud-foundry
-liberapay: # Replace with a single Liberapay username
-issuehunt: # Replace with a single IssueHunt username
-otechie: # Replace with a single Otechie username
-custom: https://www.paypal.me/osm0sis # Replace with up to 4 custom sponsorship URLs e.g., ['link1', 'link2']
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout AnyKernel3
+        uses: actions/checkout@v4
+        with:
+          path: AnyKernel3
+
+      - name: Clone Kernel Source
+        run: |
+          git clone --depth=1 https://github.com/EndCredits/android_kernel_xiaomi_sm8350-miui kernel
+
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git clang lld llvm bc bison flex libssl-dev libncurses5-dev libncursesw5-dev
+          mkdir -p toolchains
+          # Download latest prebuilt clang (Google)
+          git clone --depth=1 https://github.com/llvm/llvm-project toolchains/clang
+
+      - name: Build Kernel
+        run: |
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export PATH=$PWD/toolchains/clang/bin:$PATH
+          cd kernel
+          # Change to your defconfig
+          make vendor/vili_user_defconfig CC=clang
+          make -j$(nproc) CC=clang
+
+      - name: Copy Image to AnyKernel3
+        run: |
+          cp kernel/arch/arm64/boot/Image AnyKernel3/
+          # If using dtb/dtbo, copy them too
+          cp kernel/arch/arm64/boot/dtb.img AnyKernel3/ || true
+          cp kernel/arch/arm64/boot/dtbo.img AnyKernel3/ || true
+
+      - name: Zip AnyKernel3
+        run: |
+          cd AnyKernel3
+          zip -r9 ../Kernel-Release.zip ./*
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernel-Release
+          path: Kernel-Release.zip
+          
